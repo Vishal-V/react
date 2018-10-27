@@ -10,9 +10,9 @@
 
 // TODO: Use symbols?
 var ImmediatePriority = 1;
-var InteractivePriority = 2;
+var UserBlockingPriority = 2;
 var NormalPriority = 3;
-var WheneverPriority = 4;
+var IdlePriority = 4;
 
 // Max 31 bit integer. The max integer size in V8 for 32-bit systems.
 // Math.pow(2, 30) - 1
@@ -22,10 +22,10 @@ var maxSigned31BitInt = 1073741823;
 // Times out immediately
 var IMMEDIATE_PRIORITY_TIMEOUT = -1;
 // Eventually times out
-var INTERACTIVE_PRIORITY_TIMEOUT = 250;
+var USER_BLOCKING_PRIORITY = 250;
 var NORMAL_PRIORITY_TIMEOUT = 5000;
 // Never times out
-var WHENEVER_PRIORITY_TIMEOUT = maxSigned31BitInt;
+var IDLE_PRIORITY = maxSigned31BitInt;
 
 // Callbacks are stored as a circular, doubly linked list.
 var firstCallbackNode = null;
@@ -165,7 +165,7 @@ function flushFirstCallback() {
       } else if (nextAfterContinuation === firstCallbackNode) {
         // The new callback is the highest priority callback in the list.
         firstCallbackNode = continuationNode;
-        ensureHostCallbackIsScheduled(firstCallbackNode);
+        ensureHostCallbackIsScheduled();
       }
 
       var previous = nextAfterContinuation.previous;
@@ -197,7 +197,7 @@ function flushImmediateWork() {
       isExecutingCallback = false;
       if (firstCallbackNode !== null) {
         // There's still work remaining. Request another callback.
-        ensureHostCallbackIsScheduled(firstCallbackNode);
+        ensureHostCallbackIsScheduled();
       } else {
         isHostCallbackScheduled = false;
       }
@@ -242,7 +242,7 @@ function flushWork(didTimeout) {
     isExecutingCallback = false;
     if (firstCallbackNode !== null) {
       // There's still work remaining. Request another callback.
-      ensureHostCallbackIsScheduled(firstCallbackNode);
+      ensureHostCallbackIsScheduled();
     } else {
       isHostCallbackScheduled = false;
     }
@@ -254,9 +254,9 @@ function flushWork(didTimeout) {
 function unstable_runWithPriority(priorityLevel, eventHandler) {
   switch (priorityLevel) {
     case ImmediatePriority:
-    case InteractivePriority:
+    case UserBlockingPriority:
     case NormalPriority:
-    case WheneverPriority:
+    case IdlePriority:
       break;
     default:
       priorityLevel = NormalPriority;
@@ -314,11 +314,11 @@ function unstable_scheduleCallback(callback, deprecated_options) {
       case ImmediatePriority:
         expirationTime = startTime + IMMEDIATE_PRIORITY_TIMEOUT;
         break;
-      case InteractivePriority:
-        expirationTime = startTime + INTERACTIVE_PRIORITY_TIMEOUT;
+      case UserBlockingPriority:
+        expirationTime = startTime + USER_BLOCKING_PRIORITY;
         break;
-      case WheneverPriority:
-        expirationTime = startTime + WHENEVER_PRIORITY_TIMEOUT;
+      case IdlePriority:
+        expirationTime = startTime + IDLE_PRIORITY;
         break;
       case NormalPriority:
       default:
@@ -340,7 +340,7 @@ function unstable_scheduleCallback(callback, deprecated_options) {
   if (firstCallbackNode === null) {
     // This is the first callback in the list.
     firstCallbackNode = newNode.next = newNode.previous = newNode;
-    ensureHostCallbackIsScheduled(firstCallbackNode);
+    ensureHostCallbackIsScheduled();
   } else {
     var next = null;
     var node = firstCallbackNode;
@@ -360,7 +360,7 @@ function unstable_scheduleCallback(callback, deprecated_options) {
     } else if (next === firstCallbackNode) {
       // The new callback has the earliest expiration in the entire list.
       firstCallbackNode = newNode;
-      ensureHostCallbackIsScheduled(firstCallbackNode);
+      ensureHostCallbackIsScheduled();
     }
 
     var previous = next.previous;
@@ -534,13 +534,13 @@ if (typeof window !== 'undefined' && window._schedMock) {
     }
   }
 
-  var scheduledCallback = null;
-  var isIdleScheduled = false;
+  var scheduledHostCallback = null;
+  var isMessageEventScheduled = false;
   var timeoutTime = -1;
 
   var isAnimationFrameScheduled = false;
 
-  var isPerformingIdleWork = false;
+  var isFlushingHostCallback = false;
 
   var frameDeadline = 0;
   // We start out assuming that we run at 30fps but then the heuristic tracking
@@ -564,7 +564,12 @@ if (typeof window !== 'undefined' && window._schedMock) {
       return;
     }
 
-    isIdleScheduled = false;
+    isMessageEventScheduled = false;
+
+    var prevScheduledCallback = scheduledHostCallback;
+    var prevTimeoutTime = timeoutTime;
+    scheduledHostCallback = null;
+    timeoutTime = -1;
 
     var currentTime = getCurrentTime();
 
@@ -572,7 +577,7 @@ if (typeof window !== 'undefined' && window._schedMock) {
     if (frameDeadline - currentTime <= 0) {
       // There's no time left in this idle period. Check if the callback has
       // a timeout and whether it's been exceeded.
-      if (timeoutTime !== -1 && timeoutTime <= currentTime) {
+      if (prevTimeoutTime !== -1 && prevTimeoutTime <= currentTime) {
         // Exceeded the timeout. Invoke the callback even though there's no
         // time left.
         didTimeout = true;
@@ -584,19 +589,18 @@ if (typeof window !== 'undefined' && window._schedMock) {
           requestAnimationFrameWithTimeout(animationTick);
         }
         // Exit without invoking the callback.
+        scheduledHostCallback = prevScheduledCallback;
+        timeoutTime = prevTimeoutTime;
         return;
       }
     }
 
-    timeoutTime = -1;
-    var callback = scheduledCallback;
-    scheduledCallback = null;
-    if (callback !== null) {
-      isPerformingIdleWork = true;
+    if (prevScheduledCallback !== null) {
+      isFlushingHostCallback = true;
       try {
-        callback(didTimeout);
+        prevScheduledCallback(didTimeout);
       } finally {
-        isPerformingIdleWork = false;
+        isFlushingHostCallback = false;
       }
     }
   };
@@ -605,7 +609,22 @@ if (typeof window !== 'undefined' && window._schedMock) {
   window.addEventListener('message', idleTick, false);
 
   var animationTick = function(rafTime) {
-    isAnimationFrameScheduled = false;
+    if (scheduledHostCallback !== null) {
+      // Eagerly schedule the next animation callback at the beginning of the
+      // frame. If the scheduler queue is not empty at the end of the frame, it
+      // will continue flushing inside that callback. If the queue *is* empty,
+      // then it will exit immediately. Posting the callback at the start of the
+      // frame ensures it's fired within the earliest possible frame. If we
+      // waited until the end of the frame to post the callback, we risk the
+      // browser skipping a frame and not firing the callback until the frame
+      // after that.
+      requestAnimationFrameWithTimeout(animationTick);
+    } else {
+      // No pending work. Exit.
+      isAnimationFrameScheduled = false;
+      return;
+    }
+
     var nextFrameTime = rafTime - frameDeadline + activeFrameTime;
     if (
       nextFrameTime < activeFrameTime &&
@@ -629,16 +648,16 @@ if (typeof window !== 'undefined' && window._schedMock) {
       previousFrameTime = nextFrameTime;
     }
     frameDeadline = rafTime + activeFrameTime;
-    if (!isIdleScheduled) {
-      isIdleScheduled = true;
+    if (!isMessageEventScheduled) {
+      isMessageEventScheduled = true;
       window.postMessage(messageKey, '*');
     }
   };
 
   requestHostCallback = function(callback, absoluteTimeout) {
-    scheduledCallback = callback;
+    scheduledHostCallback = callback;
     timeoutTime = absoluteTimeout;
-    if (isPerformingIdleWork || absoluteTimeout < 0) {
+    if (isFlushingHostCallback || absoluteTimeout < 0) {
       // Don't wait for the next frame. Continue working ASAP, in a new event.
       window.postMessage(messageKey, '*');
     } else if (!isAnimationFrameScheduled) {
@@ -652,17 +671,17 @@ if (typeof window !== 'undefined' && window._schedMock) {
   };
 
   cancelHostCallback = function() {
-    scheduledCallback = null;
-    isIdleScheduled = false;
+    scheduledHostCallback = null;
+    isMessageEventScheduled = false;
     timeoutTime = -1;
   };
 }
 
 export {
   ImmediatePriority as unstable_ImmediatePriority,
-  InteractivePriority as unstable_InteractivePriority,
+  UserBlockingPriority as unstable_UserBlockingPriority,
   NormalPriority as unstable_NormalPriority,
-  WheneverPriority as unstable_WheneverPriority,
+  IdlePriority as unstable_IdlePriority,
   unstable_runWithPriority,
   unstable_scheduleCallback,
   unstable_cancelCallback,

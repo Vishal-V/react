@@ -50,7 +50,6 @@ function loadModules() {
   ReactFeatureFlags.debugRenderPhaseSideEffectsForStrictMode = false;
   ReactFeatureFlags.enableProfilerTimer = true;
   ReactFeatureFlags.enableSchedulerTracing = true;
-  ReactFeatureFlags.enableSuspense = true;
 
   React = require('react');
   SchedulerTracing = require('scheduler/tracing');
@@ -60,7 +59,6 @@ function loadModules() {
 
 describe('ProfilerDOM', () => {
   let TextResource;
-  let cache;
   let resourcePromise;
   let onInteractionScheduledWorkCompleted;
   let onInteractionTraced;
@@ -82,11 +80,9 @@ describe('ProfilerDOM', () => {
       onWorkStopped: () => {},
     });
 
-    cache = ReactCache.createCache(() => {});
-
     resourcePromise = null;
 
-    TextResource = ReactCache.createResource(([text, ms = 0]) => {
+    TextResource = ReactCache.unstable_createResource(([text, ms = 0]) => {
       resourcePromise = new Promise(
         SchedulerTracing.unstable_wrap((resolve, reject) => {
           setTimeout(
@@ -102,7 +98,7 @@ describe('ProfilerDOM', () => {
   });
 
   const AsyncText = ({ms, text}) => {
-    TextResource.read(cache, [text, ms]);
+    TextResource.read([text, ms]);
     return text;
   };
 
@@ -120,9 +116,9 @@ describe('ProfilerDOM', () => {
       const root = ReactDOM.unstable_createRoot(element);
       batch = root.createBatch();
       batch.render(
-        <React.Placeholder delayMS={100} fallback={<Text text="Loading..." />}>
+        <React.Suspense maxDuration={100} fallback={<Text text="Loading..." />}>
           <AsyncText text="Text" ms={200} />
-        </React.Placeholder>,
+        </React.Suspense>,
       );
       batch.then(
         SchedulerTracing.unstable_wrap(() => {

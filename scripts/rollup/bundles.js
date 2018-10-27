@@ -366,11 +366,18 @@ const bundles = [
   /******* React Cache (experimental) *******/
   {
     label: 'react-cache',
-    bundleTypes: [FB_WWW_DEV, FB_WWW_PROD, NODE_DEV, NODE_PROD],
+    bundleTypes: [
+      FB_WWW_DEV,
+      FB_WWW_PROD,
+      NODE_DEV,
+      NODE_PROD,
+      UMD_DEV,
+      UMD_PROD,
+    ],
     moduleType: ISOMORPHIC,
     entry: 'react-cache',
     global: 'ReactCache',
-    externals: ['react'],
+    externals: ['react', 'scheduler'],
   },
 
   /******* createComponentWithSubscriptions (experimental) *******/
@@ -391,6 +398,16 @@ const bundles = [
     entry: 'scheduler',
     global: 'Scheduler',
     externals: [],
+  },
+
+  /******* Jest React (experimental) *******/
+  {
+    label: 'jest-react',
+    bundleTypes: [NODE_DEV, NODE_PROD, FB_WWW_DEV, FB_WWW_PROD],
+    moduleType: ISOMORPHIC,
+    entry: 'jest-react',
+    global: 'JestReact',
+    externals: ['jest-diff'],
   },
 
   {
