@@ -69,7 +69,7 @@ describe('ReactIs', () => {
     expect(ReactIs.isValidElementType({type: 'div', props: {}})).toEqual(false);
   });
 
-  it('should identify async mode', () => {
+  it('should identify concurrent mode', () => {
     expect(ReactIs.typeOf(<React.unstable_ConcurrentMode />)).toBe(
       ReactIs.ConcurrentMode,
     );
@@ -142,6 +142,14 @@ describe('ReactIs', () => {
     expect(ReactIs.typeOf(portal)).toBe(ReactIs.Portal);
     expect(ReactIs.isPortal(portal)).toBe(true);
     expect(ReactIs.isPortal(div)).toBe(false);
+  });
+
+  it('should identify memo', () => {
+    const Component = () => React.createElement('div');
+    const memoized = React.memo(Component);
+    expect(ReactIs.typeOf(memoized)).toBe(ReactIs.Memo);
+    expect(ReactIs.isMemo(memoized)).toBe(true);
+    expect(ReactIs.isMemo(Component)).toBe(false);
   });
 
   it('should identify strict mode', () => {

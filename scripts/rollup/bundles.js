@@ -56,7 +56,6 @@ const NON_FIBER_RENDERER = moduleTypes.NON_FIBER_RENDERER;
 const bundles = [
   /******* Isomorphic *******/
   {
-    label: 'core',
     bundleTypes: [
       UMD_DEV,
       UMD_PROD,
@@ -75,7 +74,6 @@ const bundles = [
 
   /******* React DOM *******/
   {
-    label: 'dom-client',
     bundleTypes: [
       UMD_DEV,
       UMD_PROD,
@@ -93,9 +91,27 @@ const bundles = [
     externals: ['react'],
   },
 
-  //******* Test Utils *******/
+  /******* React Fire *******/
   {
-    label: 'dom-test-utils',
+    bundleTypes: [
+      UMD_DEV,
+      UMD_PROD,
+      UMD_PROFILING,
+      NODE_DEV,
+      NODE_PROD,
+      NODE_PROFILING,
+      FB_WWW_DEV,
+      FB_WWW_PROD,
+      FB_WWW_PROFILING,
+    ],
+    moduleType: RENDERER,
+    entry: 'react-dom/unstable-fire',
+    global: 'ReactFire',
+    externals: ['react'],
+  },
+
+  /******* Test Utils *******/
+  {
     moduleType: RENDERER_UTILS,
     bundleTypes: [FB_WWW_DEV, NODE_DEV, NODE_PROD, UMD_DEV, UMD_PROD],
     entry: 'react-dom/test-utils',
@@ -105,7 +121,6 @@ const bundles = [
 
   /* React DOM internals required for react-native-web (e.g., to shim native events from react-dom) */
   {
-    label: 'dom-unstable-native-dependencies',
     bundleTypes: [
       UMD_DEV,
       UMD_PROD,
@@ -122,7 +137,6 @@ const bundles = [
 
   /******* React DOM Server *******/
   {
-    label: 'dom-server-browser',
     bundleTypes: [
       UMD_DEV,
       UMD_PROD,
@@ -138,7 +152,6 @@ const bundles = [
   },
 
   {
-    label: 'dom-server-node',
     bundleTypes: [NODE_DEV, NODE_PROD],
     moduleType: NON_FIBER_RENDERER,
     entry: 'react-dom/server.node',
@@ -147,7 +160,6 @@ const bundles = [
 
   /******* React ART *******/
   {
-    label: 'art',
     bundleTypes: [
       UMD_DEV,
       UMD_PROD,
@@ -169,7 +181,6 @@ const bundles = [
 
   /******* React Native *******/
   {
-    label: 'native-fb',
     bundleTypes: [RN_FB_DEV, RN_FB_PROD, RN_FB_PROFILING],
     moduleType: RENDERER,
     entry: 'react-native-renderer',
@@ -189,7 +200,6 @@ const bundles = [
   },
 
   {
-    label: 'native',
     bundleTypes: [RN_OSS_DEV, RN_OSS_PROD, RN_OSS_PROFILING],
     moduleType: RENDERER,
     entry: 'react-native-renderer',
@@ -210,7 +220,6 @@ const bundles = [
 
   /******* React Native Fabric *******/
   {
-    label: 'native-fabric-fb',
     bundleTypes: [RN_FB_DEV, RN_FB_PROD, RN_FB_PROFILING],
     moduleType: RENDERER,
     entry: 'react-native-renderer/fabric',
@@ -231,7 +240,6 @@ const bundles = [
   },
 
   {
-    label: 'native-fabric',
     bundleTypes: [RN_OSS_DEV, RN_OSS_PROD, RN_OSS_PROFILING],
     moduleType: RENDERER,
     entry: 'react-native-renderer/fabric',
@@ -253,7 +261,6 @@ const bundles = [
 
   /******* React Test Renderer *******/
   {
-    label: 'test',
     bundleTypes: [FB_WWW_DEV, NODE_DEV, NODE_PROD, UMD_DEV, UMD_PROD],
     moduleType: RENDERER,
     entry: 'react-test-renderer',
@@ -262,7 +269,6 @@ const bundles = [
   },
 
   {
-    label: 'test-shallow',
     bundleTypes: [FB_WWW_DEV, NODE_DEV, NODE_PROD, UMD_DEV, UMD_PROD],
     moduleType: NON_FIBER_RENDERER,
     entry: 'react-test-renderer/shallow',
@@ -272,7 +278,6 @@ const bundles = [
 
   /******* React Noop Renderer (used for tests) *******/
   {
-    label: 'noop',
     bundleTypes: [NODE_DEV, NODE_PROD],
     moduleType: RENDERER,
     entry: 'react-noop-renderer',
@@ -295,7 +300,6 @@ const bundles = [
 
   /******* React Noop Persistent Renderer (used for tests) *******/
   {
-    label: 'noop-persistent',
     bundleTypes: [NODE_DEV, NODE_PROD],
     moduleType: RENDERER,
     entry: 'react-noop-renderer/persistent',
@@ -318,7 +322,6 @@ const bundles = [
 
   /******* React Reconciler *******/
   {
-    label: 'react-reconciler',
     bundleTypes: [NODE_DEV, NODE_PROD],
     moduleType: RECONCILER,
     entry: 'react-reconciler',
@@ -328,7 +331,6 @@ const bundles = [
 
   /******* React Persistent Reconciler *******/
   {
-    label: 'react-reconciler-persistent',
     bundleTypes: [NODE_DEV, NODE_PROD],
     moduleType: RECONCILER,
     entry: 'react-reconciler/persistent',
@@ -338,7 +340,6 @@ const bundles = [
 
   /******* Reflection *******/
   {
-    label: 'reconciler-reflection',
     moduleType: RENDERER_UTILS,
     bundleTypes: [NODE_DEV, NODE_PROD],
     entry: 'react-reconciler/reflection',
@@ -348,7 +349,6 @@ const bundles = [
 
   /******* React Is *******/
   {
-    label: 'react-is',
     bundleTypes: [
       NODE_DEV,
       NODE_PROD,
@@ -363,9 +363,17 @@ const bundles = [
     externals: [],
   },
 
+  /******* React Debug Tools *******/
+  {
+    bundleTypes: [NODE_DEV, NODE_PROD],
+    moduleType: ISOMORPHIC,
+    entry: 'react-debug-tools',
+    global: 'ReactDebugTools',
+    externals: [],
+  },
+
   /******* React Cache (experimental) *******/
   {
-    label: 'react-cache',
     bundleTypes: [
       FB_WWW_DEV,
       FB_WWW_PROD,
@@ -382,7 +390,6 @@ const bundles = [
 
   /******* createComponentWithSubscriptions (experimental) *******/
   {
-    label: 'create-subscription',
     bundleTypes: [NODE_DEV, NODE_PROD],
     moduleType: ISOMORPHIC,
     entry: 'create-subscription',
@@ -392,7 +399,6 @@ const bundles = [
 
   /******* React Scheduler (experimental) *******/
   {
-    label: 'scheduler',
     bundleTypes: [NODE_DEV, NODE_PROD, FB_WWW_DEV, FB_WWW_PROD],
     moduleType: ISOMORPHIC,
     entry: 'scheduler',
@@ -402,7 +408,6 @@ const bundles = [
 
   /******* Jest React (experimental) *******/
   {
-    label: 'jest-react',
     bundleTypes: [NODE_DEV, NODE_PROD, FB_WWW_DEV, FB_WWW_PROD],
     moduleType: ISOMORPHIC,
     entry: 'jest-react',
@@ -410,8 +415,22 @@ const bundles = [
     externals: ['jest-diff'],
   },
 
+  /******* ESLint Plugin for Hooks (proposal) *******/
   {
-    label: 'scheduler-tracing',
+    // TODO: it's awkward to create a bundle for this
+    // but if we don't, the package won't get copied.
+    // We also can't create just DEV bundle because
+    // it contains a NODE_ENV check inside.
+    // We should probably tweak our build process
+    // to allow "raw" packages that don't get bundled.
+    bundleTypes: [NODE_DEV, NODE_PROD, FB_WWW_DEV],
+    moduleType: ISOMORPHIC,
+    entry: 'eslint-plugin-react-hooks',
+    global: 'ESLintPluginReactHooks',
+    externals: [],
+  },
+
+  {
     bundleTypes: [
       FB_WWW_DEV,
       FB_WWW_PROD,
