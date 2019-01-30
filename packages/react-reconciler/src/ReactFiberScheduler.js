@@ -56,7 +56,6 @@ import {
   SimpleMemoComponent,
 } from 'shared/ReactWorkTags';
 import {
-  enableHooks,
   enableSchedulerTracing,
   enableProfilerTimer,
   enableUserTimingAPI,
@@ -165,7 +164,7 @@ import {
   commitDetachRef,
   commitPassiveHookEffects,
 } from './ReactFiberCommitWork';
-import {Dispatcher, DispatcherWithoutHooks} from './ReactFiberDispatcher';
+import {ContextOnlyDispatcher} from './ReactFiberHooks';
 
 export type Thenable = {
   then(resolve: () => mixed, reject?: () => mixed): mixed,
@@ -489,6 +488,9 @@ function commitAllLifeCycles(
     }
   }
   while (nextEffect !== null) {
+    if (__DEV__) {
+      setCurrentFiber(nextEffect);
+    }
     const effectTag = nextEffect.effectTag;
 
     if (effectTag & (Update | Callback)) {
@@ -507,11 +509,14 @@ function commitAllLifeCycles(
       commitAttachRef(nextEffect);
     }
 
-    if (enableHooks && effectTag & Passive) {
+    if (effectTag & Passive) {
       rootWithPendingPassiveEffects = finishedRoot;
     }
 
     nextEffect = nextEffect.nextEffect;
+  }
+  if (__DEV__) {
+    resetCurrentFiber();
   }
 }
 
@@ -526,6 +531,10 @@ function commitPassiveEffects(root: FiberRoot, firstEffect: Fiber): void {
 
   let effect = firstEffect;
   do {
+    if (__DEV__) {
+      setCurrentFiber(effect);
+    }
+
     if (effect.effectTag & Passive) {
       let didError = false;
       let error;
@@ -549,6 +558,9 @@ function commitPassiveEffects(root: FiberRoot, firstEffect: Fiber): void {
     }
     effect = effect.nextEffect;
   } while (effect !== null);
+  if (__DEV__) {
+    resetCurrentFiber();
+  }
 
   isRendering = previousIsRendering;
 
@@ -771,11 +783,7 @@ function commitRoot(root: FiberRoot, finishedWork: Fiber): void {
     }
   }
 
-  if (
-    enableHooks &&
-    firstEffect !== null &&
-    rootWithPendingPassiveEffects !== null
-  ) {
+  if (firstEffect !== null && rootWithPendingPassiveEffects !== null) {
     // This commit included a passive effect. These do not need to fire until
     // after the next paint. Schedule an callback to fire them in an async
     // event. To ensure serial execution, the callback will be flushed early if
@@ -1208,11 +1216,8 @@ function renderRoot(root: FiberRoot, isYieldy: boolean): void {
   flushPassiveEffects();
 
   isWorking = true;
-  if (enableHooks) {
-    ReactCurrentDispatcher.current = Dispatcher;
-  } else {
-    ReactCurrentDispatcher.current = DispatcherWithoutHooks;
-  }
+  const previousDispatcher = ReactCurrentDispatcher.current;
+  ReactCurrentDispatcher.current = ContextOnlyDispatcher;
 
   const expirationTime = root.nextExpirationTimeToWorkOn;
 
@@ -1373,7 +1378,7 @@ function renderRoot(root: FiberRoot, isYieldy: boolean): void {
 
   // We're done performing work. Time to clean up.
   isWorking = false;
-  ReactCurrentDispatcher.current = null;
+  ReactCurrentDispatcher.current = previousDispatcher;
   resetContextDependences();
   resetHooks();
 

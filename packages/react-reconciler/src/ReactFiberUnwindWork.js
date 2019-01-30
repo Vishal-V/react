@@ -214,7 +214,9 @@ function throwException(
         // attach another listener to flip the boundary back to its normal state.
         const thenables: Set<Thenable> = (workInProgress.updateQueue: any);
         if (thenables === null) {
-          workInProgress.updateQueue = (new Set([thenable]): any);
+          const updateQueue = (new Set(): any);
+          updateQueue.add(thenable);
+          workInProgress.updateQueue = updateQueue;
         } else {
           thenables.add(thenable);
         }
@@ -296,7 +298,7 @@ function throwException(
 
         let absoluteTimeoutMs;
         if (earliestTimeoutMs === -1) {
-          // If no explicit threshold is given, default to an abitrarily large
+          // If no explicit threshold is given, default to an arbitrarily large
           // value. The actual size doesn't matter because the threshold for the
           // whole tree will be clamped to the expiration time.
           absoluteTimeoutMs = maxSigned31BitInt;

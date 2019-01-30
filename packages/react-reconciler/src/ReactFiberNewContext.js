@@ -12,7 +12,12 @@ import type {Fiber} from './ReactFiber';
 import type {StackCursor} from './ReactFiberStack';
 import type {ExpirationTime} from './ReactFiberExpirationTime';
 
-export type ContextDependency<T> = {
+export type ContextDependencyList = {
+  first: ContextDependency<mixed>,
+  expirationTime: ExpirationTime,
+};
+
+type ContextDependency<T> = {
   context: ReactContext<T>,
   observedBits: number,
   next: ContextDependency<mixed> | null,
@@ -32,6 +37,8 @@ import {
   enqueueUpdate,
   ForceUpdate,
 } from 'react-reconciler/src/ReactUpdateQueue';
+import {NoWork} from './ReactFiberExpirationTime';
+import {markWorkInProgressReceivedUpdate} from './ReactFiberBeginWork';
 
 const valueCursor: StackCursor<mixed> = createCursor(null);
 
@@ -45,12 +52,29 @@ let currentlyRenderingFiber: Fiber | null = null;
 let lastContextDependency: ContextDependency<mixed> | null = null;
 let lastContextWithAllBitsObserved: ReactContext<any> | null = null;
 
+let isDisallowedContextReadInDEV: boolean = false;
+
 export function resetContextDependences(): void {
   // This is called right before React yields execution, to ensure `readContext`
   // cannot be called outside the render phase.
   currentlyRenderingFiber = null;
   lastContextDependency = null;
   lastContextWithAllBitsObserved = null;
+  if (__DEV__) {
+    isDisallowedContextReadInDEV = false;
+  }
+}
+
+export function enterDisallowedContextReadInDEV(): void {
+  if (__DEV__) {
+    isDisallowedContextReadInDEV = true;
+  }
+}
+
+export function exitDisallowedContextReadInDEV(): void {
+  if (__DEV__) {
+    isDisallowedContextReadInDEV = false;
+  }
 }
 
 export function pushProvider<T>(providerFiber: Fiber, nextValue: T): void {
@@ -141,9 +165,12 @@ export function propagateContextChange(
     let nextFiber;
 
     // Visit this fiber.
-    let dependency = fiber.firstContextDependency;
-    if (dependency !== null) {
-      do {
+    const list = fiber.contextDependencies;
+    if (list !== null) {
+      nextFiber = fiber.child;
+
+      let dependency = list.first;
+      while (dependency !== null) {
         // Check if the context matches.
         if (
           dependency.context === context &&
@@ -197,10 +224,18 @@ export function propagateContextChange(
             }
             node = node.return;
           }
+
+          // Mark the expiration time on the list, too.
+          if (list.expirationTime < renderExpirationTime) {
+            list.expirationTime = renderExpirationTime;
+          }
+
+          // Since we already found a match, we can stop traversing the
+          // dependency list.
+          break;
         }
-        nextFiber = fiber.child;
         dependency = dependency.next;
-      } while (dependency !== null);
+      }
     } else if (fiber.tag === ContextProvider) {
       // Don't scan deeper if this is a matching provider
       nextFiber = fiber.type === workInProgress.type ? null : fiber.child;
@@ -244,14 +279,35 @@ export function prepareToReadContext(
   lastContextDependency = null;
   lastContextWithAllBitsObserved = null;
 
+  const currentDependencies = workInProgress.contextDependencies;
+  if (
+    currentDependencies !== null &&
+    currentDependencies.expirationTime >= renderExpirationTime
+  ) {
+    // Context list has a pending update. Mark that this fiber performed work.
+    markWorkInProgressReceivedUpdate();
+  }
+
   // Reset the work-in-progress list
-  workInProgress.firstContextDependency = null;
+  workInProgress.contextDependencies = null;
 }
 
 export function readContext<T>(
   context: ReactContext<T>,
   observedBits: void | number | boolean,
 ): T {
+  if (__DEV__) {
+    // This warning would fire if you read context inside a Hook like useMemo.
+    // Unlike the class check below, it's not enforced in production for perf.
+    warning(
+      !isDisallowedContextReadInDEV,
+      'Context can only be read while React is rendering. ' +
+        'In classes, you can read it in the render method or getDerivedStateFromProps. ' +
+        'In function components, you can read it directly in the function body, but not ' +
+        'inside Hooks like useReducer() or useMemo().',
+    );
+  }
+
   if (lastContextWithAllBitsObserved === context) {
     // Nothing to do. We already observe everything in this context.
   } else if (observedBits === false || observedBits === 0) {
@@ -278,11 +334,18 @@ export function readContext<T>(
     if (lastContextDependency === null) {
       invariant(
         currentlyRenderingFiber !== null,
-        'Context can only be read while React is ' +
-          'rendering, e.g. inside the render method or getDerivedStateFromProps.',
+        'Context can only be read while React is rendering. ' +
+          'In classes, you can read it in the render method or getDerivedStateFromProps. ' +
+          'In function components, you can read it directly in the function body, but not ' +
+          'inside Hooks like useReducer() or useMemo().',
       );
-      // This is the first dependency in the list
-      currentlyRenderingFiber.firstContextDependency = lastContextDependency = contextItem;
+
+      // This is the first dependency for this component. Create a new list.
+      lastContextDependency = contextItem;
+      currentlyRenderingFiber.contextDependencies = {
+        first: contextItem,
+        expirationTime: NoWork,
+      };
     } else {
       // Append a new context item.
       lastContextDependency = lastContextDependency.next = contextItem;

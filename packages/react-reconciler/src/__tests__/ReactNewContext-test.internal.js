@@ -21,7 +21,6 @@ describe('ReactNewContext', () => {
     jest.resetModules();
     ReactFeatureFlags = require('shared/ReactFeatureFlags');
     ReactFeatureFlags.debugRenderPhaseSideEffectsForStrictMode = false;
-    ReactFeatureFlags.enableHooks = true;
     React = require('react');
     useContext = React.useContext;
     ReactNoop = require('react-noop-renderer');
@@ -883,6 +882,37 @@ describe('ReactNewContext', () => {
         expect(ReactNoop.getChildren()).toEqual([span(2), span(2)]);
       });
 
+      it("context consumer doesn't bail out inside hidden subtree", () => {
+        const Context = React.createContext('dark');
+        const Consumer = getConsumer(Context);
+
+        function App({theme}) {
+          return (
+            <Context.Provider value={theme}>
+              <div hidden={true}>
+                <Consumer>{value => <Text text={value} />}</Consumer>
+              </div>
+            </Context.Provider>
+          );
+        }
+
+        ReactNoop.render(<App theme="dark" />);
+        expect(ReactNoop.flush()).toEqual(['dark']);
+        expect(ReactNoop.getChildrenAsJSX()).toEqual(
+          <div hidden={true}>
+            <span prop="dark" />
+          </div>,
+        );
+
+        ReactNoop.render(<App theme="light" />);
+        expect(ReactNoop.flush()).toEqual(['light']);
+        expect(ReactNoop.getChildrenAsJSX()).toEqual(
+          <div hidden={true}>
+            <span prop="light" />
+          </div>,
+        );
+      });
+
       // This is a regression case for https://github.com/facebook/react/issues/12389.
       it('does not run into an infinite loop', () => {
         const Context = React.createContext(null);
@@ -1315,6 +1345,31 @@ describe('ReactNewContext', () => {
       inst.setState({text: 'goodbye'});
       expect(ReactNoop.flush()).toEqual(['App', 'App#renderConsumer']);
       expect(ReactNoop.getChildren()).toEqual([span('goodbye')]);
+    });
+
+    it('warns when reading context inside render phase class setState updater', () => {
+      const ThemeContext = React.createContext('light');
+
+      class Cls extends React.Component {
+        state = {};
+        render() {
+          this.setState(() => {
+            readContext(ThemeContext);
+          });
+          return null;
+        }
+      }
+
+      ReactNoop.render(<Cls />);
+      expect(ReactNoop.flush).toWarnDev(
+        [
+          'Context can only be read while React is rendering',
+          'Cannot update during an existing state transition',
+        ],
+        {
+          withoutStack: 1,
+        },
+      );
     });
   });
 
